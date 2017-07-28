@@ -1,40 +1,41 @@
 
-COLUMNACCOUNT = "Account";
-COLUMNPROJECT = "Project";
-COLUMNFEATURE = "Feature";
-COLUMNTEXTID = "TextID";
-COLUMNAREA = "Area";
-COLUMNSUBAREA = "Subarea";
-COLUMNDESCRIPTION = "Description";
-COLUMNCOMMENT = "Comment";
-COLUMNLAYOUT = "Layout";
-COLUMNTERMS = "Terms";
-COLUMNENGLISHGB = "English-GB";
-COLUMNLANGCODE = "LangCode";
-COLUMNTRANSLATION = "Translation";
+ACCOUNT = "Account";
+PROJECT = "Project";
+FEATURE = "Feature";
+TEXTID = "TextID";
+AREA = "Area";
+SUBAREA = "Subarea";
+DESCRIPTION = "Description";
+COMMENT = "Comment";
+LAYOUT = "Layout";
+TERMS = "Terms";
+ENGLISHGB = "English-GB";
+LANGCODE = "LangCode";
+TRANSLATION = "Translation";
 
+TITLE_ROW = 3
 # Source columns
-MANDATORYSOURCECOLUMNS = (
-            COLUMNACCOUNT,
-            COLUMNPROJECT,
-            COLUMNFEATURE,
-            COLUMNTEXTID,
-            COLUMNAREA,
-            COLUMNSUBAREA,
-            COLUMNLAYOUT,
-            COLUMNTERMS,
-            COLUMNDESCRIPTION,
-            COLUMNENGLISHGB,
-            COLUMNCOMMENT
+MANDATORYSOURCES_COLUMNS = (
+            ACCOUNT,
+            PROJECT,
+            FEATURE,
+            TEXTID,
+            AREA,
+            SUBAREA,
+            LAYOUT,
+            TERMS,
+            DESCRIPTION,
+            ENGLISHGB,
+            COMMENT
             )
         
 # Translation columns
-MANDATORYTRANSLATIONCOLUMNS = (
-            COLUMNACCOUNT,
-            COLUMNPROJECT,
-            COLUMNFEATURE,
-            COLUMNTEXTID,
-            COLUMNLANGCODE,
-            COLUMNTRANSLATION
+MANDATORYTRANSLATIONS_COLUMNS = (
+            ACCOUNT,
+            PROJECT,
+            FEATURE,
+            TEXTID,
+            LANGCODE,
+            TRANSLATION
             )
 

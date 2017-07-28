@@ -10,6 +10,11 @@ def read_as_list(file_name):
     fh.close()
     return lines
 
+def save_list(filename, lines, param = 'w'):
+    fh = open(filename, param, encoding='utf8')
+    fh.writelines('\n'.join(lines))
+    fh.close()
+
 def get_module():
     #(__main__.__file__): filename of the script calling it
     #(__file__): current file name
