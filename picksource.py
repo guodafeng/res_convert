@@ -11,7 +11,7 @@ import uuid
 
 from collections import defaultdict
 from utility import *
-
+from openpyxl import Workbook
 
 
 g_logger = None
@@ -41,42 +41,53 @@ class SourceItem(object):
     def __repr__(self):
         return '%s, %s, %s, %s' % (self.uni_name, self.name, self.value, self.res_file)
 
-def pick_res(root):
-    res_list = []  #store all matched "name = value"
-    
-    g_logger.info("Picking folder:" + root)
-    for item in os.listdir(root):
-        path = os.path.join(root, item)
-        if os.path.isdir(path):
-            res_list += pick_res(path)
-        elif _is_res_file(path):
-            res_list += pick_res_file(path)
+class SourceToXlsx(object):
+    def __init__(self):
+        self.wb = Workbook()
+        self.ws = self.wb.active
+        self.col_map = {}
+        self.row_num = constants.TITLE_ROW
+        self.ws['A1'] = 'Generated from folder %s' % g_root
 
-        else:
-            g_logger.debug('Skipped file: ' + path)
-    return res_list
+        self.add_head_row()
+        
+    def add_head_row(self):
+        col_num = ord('A')
+        col_map = {:}
+        for col in constants.SOURCES_COLUMNS:
+            self.col_map[col] = chr(col_num)
+            idx = self.col_map[col] + str(self.row_num)
+            self.ws[idx] = col
+            col_num += 1
+
+        self.row_num += 1
+
+    def add_res_content(self, res_list):
+        for res in res_list:
+            add_res_row(res)
+
+    def add_res_row(self, res):
+        idx = self.col_map[TEXTID] + str(self.row_num)
+        self.ws[idx] = res.uni_name
+
+        idx = self.col_map[ENGLISHGB] + str(self.row_num)
+        self.ws[idx] = res.value
+
+        idx = self.col_map[SOURCEID] + str(self.row_num)
+        self.ws[idx] = res.name
+        
+        idx = self.col_map[SOURCEPATH] + str(self.row_num)
+        self.ws[idx] = res.res_file
+
+        self.row_num += 1
+
+    def save(self, filename):
+        self.wb.save(filename)
 
 def save_to_xlsx(res_list):
-    from openpyxl import Workbook
-    wb = Workbook()
-    ws = wb.active
-
-    ws['A1'] = 'Generated from folder %s' % g_root
-    
-    #add title row
-    col_num = ord('A')
-    row_num = str(constants.TITLE_ROW)
-    for col in constants.MANDATORYSOURCES_COLUMNS:
-        cell = chr(col_num) + row_num
-        ws[cell] = col
-        col_num += 1
-
-    for res in res_list:
-
-
-    wb.save('test.xlsx')
-
-
+    convertor = SourceToXlsx()
+    convertor.add_res_content(res_list)
+    convertor.save('soureces.xlsx')
 
 
 def print_duplicate(res_list):
@@ -97,12 +108,30 @@ def print_duplicate(res_list):
                 print( duplicated)
 
 
+
 def get_res_pattern():
     #re.compile(r'([a-zA-Z0-9_\-\.\[\]]*)\s*=\s*(.*)')
     return re.compile(r'([^=]+)\s*=\s*(.*)')
 
 def get_comment_pattern():
     return re.compile(r'^\s*#.*')
+
+def pick_res(root):
+    res_list = []  #store all matched "name = value"
+    
+    g_logger.info("Picking folder:" + root)
+    for item in os.listdir(root):
+        path = os.path.join(root, item)
+        if os.path.isdir(path):
+            res_list += pick_res(path)
+        elif _is_res_file(path):
+            res_list += pick_res_file(path)
+
+        else:
+            g_logger.debug('Skipped file: ' + path)
+    return res_list
+
+
 
 def pick_res_file(file_name):
     """
