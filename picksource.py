@@ -5,27 +5,40 @@ import sys
 import os
 import re
 import logging
-import constants
 import argparse
 import uuid
-
-from utility import *
 from openpyxl import Workbook
+
+import constants
+import utility 
 
 
 g_logger = None
+def mylogger():
+    global g_logger
+    if g_logger is None:
+        g_logger = utility.get_logger()
 
-# 1. pick id and values from .property file to xlsx
-# 2. transfer xlsx back to .property files, group translated different 
-#    languages to different folder
+    return g_logger
+ 
+
 class SourceItem(object):
     uni_ids = set()
 
-    def __init__(self, name, value, res_file):
+    def __init__(self, name, value, res_file, textid = ''):
+        """
+        name: ID-In-Source in out xlsx
+        res_file: Path-of-Source in out xlsx
+        textid: TextID in source Table
+        value: English-GB in source Table
+        """
         self.name = name
         self.value = value
         self.res_file = res_file
-        self.uni_name = name + '_' + self.get_uniq_id()
+        if textid == '':
+            self.textid = name + '_' + self.get_uniq_id()
+        else:
+            self.textid = textid
 
     def get_uniq_id(self):
         uni_id = str(uuid.uuid4())[:8]
@@ -37,13 +50,16 @@ class SourceItem(object):
 
 
     def __repr__(self):
-        return '%s, %s, %s, %s' % (self.uni_name, self.name, self.value, self.res_file)
+        return '%s, %s, %s, %s' % (self.textid, self.name, self.value, self.res_file)
 
 class SourceToXlsx(object):
+    """
+    pick id and values from .property file to xlsx
+    """
     def __init__(self, root):
         self.wb = Workbook()
         self.ws = self.wb.active
-        self.col_map = {}
+        self.col_map = constants.col_in_xlsx(constants.SOURCES_COLUMNS)
         self.row_num = constants.TITLE_ROW
         self.source_root = root
         self.ws['A1'] = ('Generated from folder %s' %
@@ -58,12 +74,9 @@ class SourceToXlsx(object):
         self.add_res_content(res_list)
         
     def add_head_row(self):
-        col_num = ord('A')
         for col in constants.SOURCES_COLUMNS:
-            self.col_map[col] = chr(col_num)
             idx = self.col_map[col] + str(self.row_num)
             self.ws[idx] = col
-            col_num += 1
 
         self.row_num += 1
 
@@ -73,7 +86,7 @@ class SourceToXlsx(object):
 
     def add_res_row(self, res):
         idx = self.col_map[constants.TEXTID] + str(self.row_num)
-        self.ws[idx] = res.uni_name
+        self.ws[idx] = res.textid
 
         idx = self.col_map[constants.ENGLISHGB] + str(self.row_num)
         self.ws[idx] = res.value
@@ -89,10 +102,41 @@ class SourceToXlsx(object):
     def save(self, filename):
         try:
             self.wb.save(filename)
-        except Exception, e:
+        except Exception as e:
             mylogger().error(str(e))
             mylogger().error('%s might be opened by other application' %
                     filename)
+
+    @classmethod
+    def load_source_xlsx(cls, xlsx):
+        """
+        Load the generated sources.xlsx by class SourceToXlsx
+        as a dict {uni_id: sourceitem}
+        """
+        from openpyxl import load_workbook
+        wb = load_workbook(filename = xlsx)
+        ws = wb.active
+        col_map = constants.col_in_xlsx(constants.SOURCES_COLUMNS)
+        read_row = constants.TITLE_ROW + 1
+        
+        idx = col_map[constants.TEXTID] + str(read_row)
+        source_map = {}
+        while ws[idx].value is not None:
+            name_idx = col_map[constants.SOURCEID] + str(read_row)
+            value_idx = col_map[constants.ENGLISHGB] + str(read_row)
+            path_idx = col_map[constants.SOURCEPATH] + str(read_row)
+
+            source_map[ws[idx].value] = (
+            SourceItem(ws[name_idx].value,
+                    ws[value_idx].value, ws[path_idx].value,
+                    ws[idx].value) 
+            )
+
+            read_row += 1 
+            idx = col_map[constants.TEXTID] + str(read_row)
+
+        return source_map
+
 
 
 class SourcePicker(object):
@@ -127,15 +171,15 @@ class SourcePicker(object):
 
     def pick_file(self, file_name):
         """
-            file_name: the file name of .propery file
-            output: [SourceItem] of the property file
+        file_name: the file name of .propery file
+        output: [SourceItem] of the property file
         """
         mylogger().info("Picking file:" + file_name)
 
         pair = self.get_res_pattern()
         comment = self.get_comment_pattern()
 
-        lines = read_as_list(file_name)
+        lines = utility.read_as_list(file_name)
 
         relative_path = os.path.relpath(file_name, self.root)
         res_list = []
@@ -175,7 +219,7 @@ class SourcePicker(object):
 
 def print_duplicate(res_list):
     """
-        findout if there is name duplicated in different files
+    findout if there is name duplicated in different files
     """
     from collections import defaultdict
     names_dict = defaultdict(list) 
@@ -195,13 +239,7 @@ def print_duplicate(res_list):
                 print( duplicated)
 
 
-def mylogger():
-    global g_logger
-    if g_logger is None:
-        g_logger = get_logger()
-
-    return g_logger
-       
+      
 def process(root):
      # prepare_out_folder
     parent = os.path.abspath(os.path.join(root,

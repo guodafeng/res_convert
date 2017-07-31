@@ -35,7 +35,7 @@ SOURCES_COLUMNS = (
             )
         
 # Translation columns
-MANDATORYTRANSLATIONS_COLUMNS = (
+TRANSLATIONS_COLUMNS = (
             ACCOUNT,
             PROJECT,
             FEATURE,
@@ -43,4 +43,18 @@ MANDATORYTRANSLATIONS_COLUMNS = (
             LANGCODE,
             TRANSLATION
             )
+
+def col_in_xlsx(columns, start = 'A'):
+    """
+    columns: array of column names
+    start: start column in xlsx
+    return mapping of colum name to column in xlsx
+    """
+    col_map = {}
+    col_num = ord(start)
+    for col in columns:
+        col_map[col] = chr(col_num)
+        col_num += 1
+    return col_map
+
 
