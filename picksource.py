@@ -9,13 +9,11 @@ import constants
 import argparse
 import uuid
 
-from collections import defaultdict
 from utility import *
 from openpyxl import Workbook
 
 
 g_logger = None
-g_root = ""
 
 # 1. pick id and values from .property file to xlsx
 # 2. transfer xlsx back to .property files, group translated different 
@@ -32,7 +30,7 @@ class SourceItem(object):
     def get_uniq_id(self):
         uni_id = str(uuid.uuid4())[:8]
         while uni_id in SourceItem.uni_ids:
-            g_logger.warn(uni_id + 'id collision, reproduce')
+            mylogger().warn(uni_id + 'id collision, reproduce')
             uni_id = str(uuid.uuid4())[:8]
         SourceItem.uni_ids.add(uni_id)
         return uni_id
@@ -42,18 +40,25 @@ class SourceItem(object):
         return '%s, %s, %s, %s' % (self.uni_name, self.name, self.value, self.res_file)
 
 class SourceToXlsx(object):
-    def __init__(self):
+    def __init__(self, root):
         self.wb = Workbook()
         self.ws = self.wb.active
         self.col_map = {}
         self.row_num = constants.TITLE_ROW
-        self.ws['A1'] = 'Generated from folder %s' % g_root
+        self.source_root = root
+        self.ws['A1'] = ('Generated from folder %s' %
+            os.path.abspath(self.source_root))
 
         self.add_head_row()
+        self.pick_source()
+
+    def pick_source(self):
+        picker = SourcePicker(self.source_root)
+        res_list = picker.pick()
+        self.add_res_content(res_list)
         
     def add_head_row(self):
         col_num = ord('A')
-        col_map = {:}
         for col in constants.SOURCES_COLUMNS:
             self.col_map[col] = chr(col_num)
             idx = self.col_map[col] + str(self.row_num)
@@ -64,33 +69,115 @@ class SourceToXlsx(object):
 
     def add_res_content(self, res_list):
         for res in res_list:
-            add_res_row(res)
+            self.add_res_row(res)
 
     def add_res_row(self, res):
-        idx = self.col_map[TEXTID] + str(self.row_num)
+        idx = self.col_map[constants.TEXTID] + str(self.row_num)
         self.ws[idx] = res.uni_name
 
-        idx = self.col_map[ENGLISHGB] + str(self.row_num)
+        idx = self.col_map[constants.ENGLISHGB] + str(self.row_num)
         self.ws[idx] = res.value
 
-        idx = self.col_map[SOURCEID] + str(self.row_num)
+        idx = self.col_map[constants.SOURCEID] + str(self.row_num)
         self.ws[idx] = res.name
         
-        idx = self.col_map[SOURCEPATH] + str(self.row_num)
+        idx = self.col_map[constants.SOURCEPATH] + str(self.row_num)
         self.ws[idx] = res.res_file
 
         self.row_num += 1
 
     def save(self, filename):
-        self.wb.save(filename)
+        try:
+            self.wb.save(filename)
+        except Exception, e:
+            mylogger().error(str(e))
+            mylogger().error('%s might be opened by other application' %
+                    filename)
 
-def save_to_xlsx(res_list):
-    convertor = SourceToXlsx()
-    convertor.add_res_content(res_list)
-    convertor.save('soureces.xlsx')
 
+class SourcePicker(object):
+    def __init__(self, root):
+        self.root = root
+
+    def get_res_pattern(self):
+        #to match name = value in file
+        return re.compile(r'([^=]+)\s*=\s*(.*)')
+
+    def get_comment_pattern(self):
+        return re.compile(r'^\s*#.*')
+    
+    def pick(self):
+        return self.pick_folder(self.root)
+
+    def pick_folder(self, folder):
+        res_list = []  #store all matched "name = value"
+        
+        mylogger().info("Picking folder:" + folder)
+        for item in os.listdir(folder):
+            subpath = os.path.join(folder, item)
+            if os.path.isdir(subpath):
+                res_list += self.pick_folder(subpath)
+            elif self._is_res_file(subpath):
+                res_list += self.pick_file(subpath)
+            else:
+                mylogger().debug('Skipped file: ' + subpath)
+        return res_list
+
+
+
+    def pick_file(self, file_name):
+        """
+            file_name: the file name of .propery file
+            output: [SourceItem] of the property file
+        """
+        mylogger().info("Picking file:" + file_name)
+
+        pair = self.get_res_pattern()
+        comment = self.get_comment_pattern()
+
+        lines = read_as_list(file_name)
+
+        relative_path = os.path.relpath(file_name, self.root)
+        res_list = []
+        comments = []
+        mismatchs = []
+        for line in lines:
+            if comment.match(line):
+                comments.append(line)
+                continue
+            if line.strip() == '':
+                continue # skip blank lines
+            
+            match = pair.match(line)
+            if match:
+                res_list.append(SourceItem(match.groups()[0].strip(),
+                    match.groups()[1].strip(),
+                    relative_path))
+            else:
+                mismatchs.append(line)
+
+        if len(mismatchs) > 0:
+            mylogger().warn('In %s mismatched lines:\n %s' % (file_name,
+                ''.join(mismatchs)))
+        mylogger().debug('In %s commented lines:\n %s' % (file_name, 
+            ''.join(comments)))
+
+        return res_list
+        
+    def _is_res_file(self, file_name):
+        name_split = os.path.splitext(os.path.basename(file_name))
+        if name_split[0] in ['manifest']:
+            return False
+        if name_split[1] != '.properties':
+            return False
+        return True
+    
 
 def print_duplicate(res_list):
+    """
+        findout if there is name duplicated in different files
+    """
+    from collections import defaultdict
     names_dict = defaultdict(list) 
     for res in res_list:
         names_dict[res.name].append(res)
@@ -108,107 +195,35 @@ def print_duplicate(res_list):
                 print( duplicated)
 
 
-
-def get_res_pattern():
-    #re.compile(r'([a-zA-Z0-9_\-\.\[\]]*)\s*=\s*(.*)')
-    return re.compile(r'([^=]+)\s*=\s*(.*)')
-
-def get_comment_pattern():
-    return re.compile(r'^\s*#.*')
-
-def pick_res(root):
-    res_list = []  #store all matched "name = value"
-    
-    g_logger.info("Picking folder:" + root)
-    for item in os.listdir(root):
-        path = os.path.join(root, item)
-        if os.path.isdir(path):
-            res_list += pick_res(path)
-        elif _is_res_file(path):
-            res_list += pick_res_file(path)
-
-        else:
-            g_logger.debug('Skipped file: ' + path)
-    return res_list
-
-
-
-def pick_res_file(file_name):
-    """
-    file_name: the file name of .propery file
-    output: [SourceItem()] of the property file
-    """
-    g_logger.info("Picking file:" + file_name)
-
-    pair = get_res_pattern()
-    comment = get_comment_pattern()
-
-    lines = read_as_list(file_name)
-
-    relative_path = os.path.relpath(file_name, g_root)
-    res_list = []
-    comments = []
-    mismatchs = []
-    for line in lines:
-        if comment.match(line):
-            comments.append(line)
-            continue
-        if line.strip() == '':
-            continue # skip blank lines
-        
-        match = pair.match(line)
-        if match:
-            res_list.append(SourceItem(match.groups()[0].strip(),
-                match.groups()[1].strip(),
-                relative_path))
-        else:
-            mismatchs.append(line)
-
-    if len(mismatchs) > 0:
-        g_logger.warn('In %s mismatched lines:\n %s' % (file_name,
-            ''.join(mismatchs)))
-    g_logger.debug('In %s commented lines:\n %s' % (file_name, 
-        ''.join(comments)))
-
-    return res_list
-    
-def _is_res_file(file_name):
-    name_split = os.path.splitext(os.path.basename(file_name))
-    if name_split[0] in ['manifest']:
-        return False
-    if name_split[1] != '.properties':
-        return False
-    return True
-    
-def process_res(root):
-    global g_root
+def mylogger():
     global g_logger
+    if g_logger is None:
+        g_logger = get_logger()
 
-    g_root = root
+    return g_logger
+       
+def process(root):
      # prepare_out_folder
-    parent = os.path.abspath(os.path.join(g_root,
+    parent = os.path.abspath(os.path.join(root,
         os.pardir))
     out_folder = os.path.join(parent, 'res_pick')
     if not os.path.exists(out_folder):
         os.mkdir(out_folder)
 
-    # set all output to out_folder
+    # set current dir to out_folder, so output files will be there
     print("change out dir to:" + out_folder)
     os.chdir(out_folder)
 
-    g_logger = get_logger()
-
     try:
-        res_list = pick_res(g_root)
-        save_to_xlsx(res_list)
-        
+        convertor = SourceToXlsx(root)
+        convertor.save("sources.xlsx")
     except Exception as e:
-        g_logger.error(str(e))
+        mylogger().error(str(e))
         pass
  
 def main():
-    parser = argparse.ArgumentParser(valueription='Pick resource string \
-    from given folder')
+    parser = argparse.ArgumentParser(description='Pick resource string \
+        from given folder')
 
     parser.add_argument('-i','--in', nargs='+', required=True,
                        help='''Define root folder of resource files. It is mandatory.''')
@@ -219,20 +234,8 @@ def main():
     
     args = vars(parser.parse_args())
    
-    process_res(os.path.abspath(args['in'][0]))
+    process(os.path.abspath(args['in'][0]))
 
-def main_test():
-    line = 'simContacts-imported3[two]    = Imported {{n}} contacts'
-    pair = re.compile(r'([a-zA-Z0-9_\-\.]*)\s*=\s*(.*)')
-    match = pair.match(line)
-    if match:
-        print(match.group()) 
-    else:
-        print('cannot match: ' +line)
-
-    #call_pick_res('en-GB')
-    
-   
 
 if __name__ == '__main__':
     main()

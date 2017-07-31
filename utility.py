@@ -16,7 +16,7 @@ def save_list(filename, lines, param = 'w'):
     fh.close()
 
 def get_module():
-    #(__main__.__file__): filename of the script calling it
+    #(__main__.__file__): filename of the script calling this function
     #(__file__): current file name
     return os.path.splitext(os.path.basename(__main__.__file__))[0]
 
@@ -26,8 +26,7 @@ def get_logger():
     logger.setLevel(logging.DEBUG)
     # create file handler which logs even debug messages
     fh = logging.FileHandler(module_name + '.log', encoding='utf8')
-    fh.setLevel(logging.WARN)
-    #fh.setLevel(logging.ERROR)
+    fh.setLevel(logging.INFO)
     # create console handler with a higher log level
     ch = logging.StreamHandler()
     ch.setLevel(logging.ERROR)

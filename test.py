@@ -11,8 +11,8 @@ class TestResConvert(unittest.TestCase):
             s.split(2)
 
     def test_xlsx_save(self):
-        res = []
-        save_to_xlsx(res)
+        convertor = SourceToXlsx('test')
+        convertor.save('test\\sources_test.xlsx')
 
 
 if __name__ == '__main__':
