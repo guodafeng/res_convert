@@ -25,7 +25,7 @@ def mylogger():
 class SourceItem(object):
     uni_ids = set()
 
-    def __init__(self, name, value, res_file, textid = ''):
+    def __init__(self, name, value, res_file, feature, textid = ''):
         """
         name: ID-In-Source in out xlsx
         res_file: Path-of-Source in out xlsx
@@ -35,6 +35,7 @@ class SourceItem(object):
         self.name = name
         self.value = value
         self.res_file = res_file
+        self.feature = feature
         if textid == '':
             self.textid = name + '_' + self.get_uniq_id()
         else:
@@ -97,6 +98,9 @@ class SourceToXlsx(object):
         idx = self.col_map[constants.SOURCEPATH] + str(self.row_num)
         self.ws[idx] = res.res_file
 
+        idx = self.col_map[constants.FEATURE] + str(self.row_num)
+        self.ws[idx] = res.feature
+
         self.row_num += 1
 
     def save(self, filename):
@@ -125,11 +129,12 @@ class SourceToXlsx(object):
             name_idx = col_map[constants.SOURCEID] + str(read_row)
             value_idx = col_map[constants.ENGLISHGB] + str(read_row)
             path_idx = col_map[constants.SOURCEPATH] + str(read_row)
+            fea_idx = col_map[constants.FEATURE] + str(read_reow)
 
             source_map[ws[idx].value] = (
             SourceItem(ws[name_idx].value,
                     ws[value_idx].value, ws[path_idx].value,
-                    ws[idx].value) 
+                    ws[fea_idx].value, ws[idx].value) 
             )
 
             read_row += 1 
@@ -162,14 +167,31 @@ class SourcePicker(object):
             if os.path.isdir(subpath):
                 res_list += self.pick_folder(subpath)
             elif self._is_res_file(subpath):
-                res_list += self.pick_file(subpath)
+                feature = self.get_feature(subpath)
+                res_list += self.pick_file(subpath, feature)
             else:
                 mylogger().debug('Skipped file: ' + subpath)
         return res_list
 
+    @classmethod
+    def get_feature(cls, filename):
+            parent = os.path.abspath(os.path.join(filename, os.pardir))
+            featur_name = ''
+
+            while not os.path.exists(parent + '\\manifest.properties'):
+                parent2 = os.path.abspath(os.path.join(parent, os.pardir))
+                # if look back reach root of drive and no manifest file
+                # use direct parent folder as feature name
+                if parent == parent2: 
+                    parent = os.path.abspath(os.path.join(filename, os.pardir))
+                    break
+                parent = parent2
+                
+            featur_name = os.path.basename(parent)
+            return featur_name
 
 
-    def pick_file(self, file_name):
+    def pick_file(self, file_name, feature):
         """
         file_name: the file name of .propery file
         output: [SourceItem] of the property file
@@ -196,7 +218,7 @@ class SourcePicker(object):
             if match:
                 res_list.append(SourceItem(match.groups()[0].strip(),
                     match.groups()[1].strip(),
-                    relative_path))
+                    relative_path, feature))
             else:
                 mismatchs.append(line)
 
@@ -208,6 +230,10 @@ class SourcePicker(object):
 
         return res_list
         
+    def update_file(file_name, res_list):
+        """
+        change the value in file_name with source item in res_list
+        """
     def _is_res_file(self, file_name):
         name_split = os.path.splitext(os.path.basename(file_name))
         if name_split[0] in ['manifest']:
@@ -244,9 +270,10 @@ def process(root):
      # prepare_out_folder
     parent = os.path.abspath(os.path.join(root,
         os.pardir))
-    out_folder = os.path.join(parent, 'res_pick')
-    if not os.path.exists(out_folder):
-        os.mkdir(out_folder)
+    out_folder = parent
+    #out_folder = os.path.join(parent, 'res_pick')
+    # if not os.path.exists(out_folder):
+        # os.mkdir(out_folder)
 
     # set current dir to out_folder, so output files will be there
     print("change out dir to:" + out_folder)

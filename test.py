@@ -17,10 +17,15 @@ class TestResConvert(unittest.TestCase):
         self.assertEqual('(SIM PIN required)',
         source_map['emergencyCallsOnly-pinRequired_8beba2ef'].value)
 
+    @unittest.skip
     def test_load_trans_xlsx(self):
         trans_map = XlsxToSource().load_translate_xlsx('test\\translate_test.xlsx')
         self.assertEqual('级别23', trans_map['sk-SK'][0].translation)
 
+    def test_get_feature(self):
+        feature = SourcePicker.get_feature(r'D:\yunfeng\nstring\convert\source\en-US\apps\communications\contacts\contacts.properties')
+
+        self.assertEqual('communications', feature)
 
 
 

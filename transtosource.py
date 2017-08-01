@@ -68,6 +68,40 @@ class XlsxToSource(object):
 
         return translate_map
 
+    def trans_to_source(self, source_us, source_xlsx, trans_xlsx):
+        """
+        for each langcode in trans_xlsx, copy source_us to langcode
+            named folder, and update the .properties files according to
+            source_xlsx and trans_xlsx
+        """
+        from collections import defaultdict
+        import copy
+        source_map = SourceToXlsx.load_source_xlsx(source_xlsx)
+        trans_map = self.load_translate_xlsx(trans_xlsx)
+
+        source_root = os.path.abspath(os.path.join(source_us, os.pardir))
+        for lancode in trans_map:
+            source_lan = source_root + '\\' + lancode
+            if not os.path.exists(source_lan):
+                os.mkdir(source_lan)
+
+            # map source file and all it's translate string
+            trans_source_map = defaultdict(list)
+            for tran in trans_map[lancode]:
+                src_item = source_map[tran.textid]
+                tran_src_item = copy.copy(src_item)
+                tran_src_item.value = tran.translation
+                trans_source_map[tran_src_item.res_file] = tran_src_item
+
+            update_source_lan(source_lan, trans_source_map)
+
+    def update_source_lan(source_lan, source_map):
+        for relpath in source_map:
+            update_file(source_lan + '\\' + relpath,
+                    source_map[relpath])
+
+    def update_file(source_file, res_list):
+
 
 
 
