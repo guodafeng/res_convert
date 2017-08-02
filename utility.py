@@ -12,7 +12,7 @@ def read_as_list(file_name):
 
 def save_list(filename, lines, param = 'w'):
     fh = open(filename, param, encoding='utf8')
-    fh.writelines('\n'.join(lines))
+    fh.writelines(lines)
     fh.close()
 
 def get_module():
@@ -20,12 +20,12 @@ def get_module():
     #(__file__): current file name
     return os.path.splitext(os.path.basename(__main__.__file__))[0]
 
-def get_logger():
+def get_logger(path):
     module_name = get_module()
     logger = logging.getLogger(module_name)
     logger.setLevel(logging.DEBUG)
     # create file handler which logs even debug messages
-    fh = logging.FileHandler(module_name + '.log', encoding='utf8')
+    fh = logging.FileHandler(path + '\\' + module_name + '.log', encoding='utf8')
     fh.setLevel(logging.INFO)
     # create console handler with a higher log level
     ch = logging.StreamHandler()

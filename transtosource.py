@@ -76,14 +76,16 @@ class XlsxToSource(object):
         """
         from collections import defaultdict
         import copy
-        source_map = SourceToXlsx.load_source_xlsx(source_xlsx)
+        import shutil
+
+        source_map = picksource.SourceToXlsx.load_source_xlsx(source_xlsx)
         trans_map = self.load_translate_xlsx(trans_xlsx)
 
         source_root = os.path.abspath(os.path.join(source_us, os.pardir))
         for lancode in trans_map:
             source_lan = source_root + '\\' + lancode
             if not os.path.exists(source_lan):
-                os.mkdir(source_lan)
+                shutil.copytree(source_us, source_lan)
 
             # map source file and all it's translate string
             trans_source_map = defaultdict(list)
@@ -91,16 +93,15 @@ class XlsxToSource(object):
                 src_item = source_map[tran.textid]
                 tran_src_item = copy.copy(src_item)
                 tran_src_item.value = tran.translation
-                trans_source_map[tran_src_item.res_file] = tran_src_item
+                trans_source_map[tran_src_item.res_file].append(tran_src_item)
 
-            update_source_lan(source_lan, trans_source_map)
+            self.update_source_lan(source_lan, trans_source_map)
 
-    def update_source_lan(source_lan, source_map):
+    def update_source_lan(self, source_lan, source_map):
         for relpath in source_map:
-            update_file(source_lan + '\\' + relpath,
+            picksource.SourceUpdate().update_file(source_lan + '\\' + relpath,
                     source_map[relpath])
 
-    def update_file(source_file, res_list):
 
 
 

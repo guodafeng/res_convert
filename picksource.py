@@ -14,10 +14,10 @@ import utility
 
 
 g_logger = None
-def mylogger():
+def mylogger(path = ''):
     global g_logger
     if g_logger is None:
-        g_logger = utility.get_logger()
+        g_logger = utility.get_logger(path)
 
     return g_logger
  
@@ -58,11 +58,14 @@ class SourceToXlsx(object):
     pick id and values from .property file to xlsx
     """
     def __init__(self, root):
+        
+        self.source_root = os.path.abspath(root)
+
         self.wb = Workbook()
         self.ws = self.wb.active
         self.col_map = constants.col_in_xlsx(constants.SOURCES_COLUMNS)
         self.row_num = constants.TITLE_ROW
-        self.source_root = root
+
         self.ws['A1'] = ('Generated from folder %s' %
             os.path.abspath(self.source_root))
 
@@ -105,6 +108,11 @@ class SourceToXlsx(object):
 
     def save(self, filename):
         try:
+            if filename.find(':') < 0: # not abs path
+                out_folder = os.path.abspath(
+                        os.path.join(self.source_root, os.pardir))
+                filename = out_folder + '\\' + filename
+ 
             self.wb.save(filename)
         except Exception as e:
             mylogger().error(str(e))
@@ -129,7 +137,7 @@ class SourceToXlsx(object):
             name_idx = col_map[constants.SOURCEID] + str(read_row)
             value_idx = col_map[constants.ENGLISHGB] + str(read_row)
             path_idx = col_map[constants.SOURCEPATH] + str(read_row)
-            fea_idx = col_map[constants.FEATURE] + str(read_reow)
+            fea_idx = col_map[constants.FEATURE] + str(read_row)
 
             source_map[ws[idx].value] = (
             SourceItem(ws[name_idx].value,
@@ -143,18 +151,64 @@ class SourceToXlsx(object):
         return source_map
 
 
-
-class SourcePicker(object):
-    def __init__(self, root):
-        self.root = root
-
+class SourceBasic(object):
     def get_res_pattern(self):
-        #to match name = value in file
-        return re.compile(r'([^=]+)\s*=\s*(.*)')
+        #to match name = value in file except start with #
+        return re.compile(r'^(?!#)\s*([^= ]+)\s*=\s*(.*)\s*')
 
     def get_comment_pattern(self):
         return re.compile(r'^\s*#.*')
-    
+
+
+class SourceUpdate(SourceBasic):
+    def update_file(self, file_name, res_list):
+        """
+        change the value in file_name with value in res_list
+        """
+        #TODO: handle the same file has same ID, e.g. music.properties
+        # change res_list to map name:value
+        res_map = {}
+        for item in res_list:
+            res_map[item.name] = item.value
+
+        pair = self.get_res_pattern()
+
+        lines = utility.read_as_list(file_name)
+        for index, line in enumerate(lines):
+            match = pair.match(line)
+            if match:
+                name = match.groups()[0].strip()
+                value = match.groups()[1].strip()
+                replace_after = line.rfind(value)
+                if name in res_map: 
+                    lines[index] = (line[:replace_after] + res_map[name]
+                    + '\n')
+                    
+
+        utility.save_list(file_name, lines)
+
+
+class SourcePicker(SourceBasic):
+    @classmethod
+    def get_feature(cls, filename):
+        parent = os.path.abspath(os.path.join(filename, os.pardir))
+        featur_name = ''
+
+        while not os.path.exists(parent + '\\manifest.properties'):
+            parent2 = os.path.abspath(os.path.join(parent, os.pardir))
+            # if look back reach root of drive and no manifest file
+            # use direct parent folder as feature name
+            if parent == parent2: 
+                parent = os.path.abspath(os.path.join(filename, os.pardir))
+                break
+            parent = parent2
+            
+        featur_name = os.path.basename(parent)
+        return featur_name
+
+    def __init__(self, root):
+        self.root = root
+
     def pick(self):
         return self.pick_folder(self.root)
 
@@ -173,24 +227,6 @@ class SourcePicker(object):
                 mylogger().debug('Skipped file: ' + subpath)
         return res_list
 
-    @classmethod
-    def get_feature(cls, filename):
-            parent = os.path.abspath(os.path.join(filename, os.pardir))
-            featur_name = ''
-
-            while not os.path.exists(parent + '\\manifest.properties'):
-                parent2 = os.path.abspath(os.path.join(parent, os.pardir))
-                # if look back reach root of drive and no manifest file
-                # use direct parent folder as feature name
-                if parent == parent2: 
-                    parent = os.path.abspath(os.path.join(filename, os.pardir))
-                    break
-                parent = parent2
-                
-            featur_name = os.path.basename(parent)
-            return featur_name
-
-
     def pick_file(self, file_name, feature):
         """
         file_name: the file name of .propery file
@@ -199,21 +235,13 @@ class SourcePicker(object):
         mylogger().info("Picking file:" + file_name)
 
         pair = self.get_res_pattern()
-        comment = self.get_comment_pattern()
 
         lines = utility.read_as_list(file_name)
 
         relative_path = os.path.relpath(file_name, self.root)
         res_list = []
-        comments = []
         mismatchs = []
         for line in lines:
-            if comment.match(line):
-                comments.append(line)
-                continue
-            if line.strip() == '':
-                continue # skip blank lines
-            
             match = pair.match(line)
             if match:
                 res_list.append(SourceItem(match.groups()[0].strip(),
@@ -223,17 +251,11 @@ class SourcePicker(object):
                 mismatchs.append(line)
 
         if len(mismatchs) > 0:
-            mylogger().warn('In %s mismatched lines:\n %s' % (file_name,
+            mylogger().warning('In %s mismatched lines:\n %s' % (file_name,
                 ''.join(mismatchs)))
-        mylogger().debug('In %s commented lines:\n %s' % (file_name, 
-            ''.join(comments)))
 
         return res_list
-        
-    def update_file(file_name, res_list):
-        """
-        change the value in file_name with source item in res_list
-        """
+
     def _is_res_file(self, file_name):
         name_split = os.path.splitext(os.path.basename(file_name))
         if name_split[0] in ['manifest']:
@@ -267,19 +289,14 @@ def print_duplicate(res_list):
 
       
 def process(root):
-     # prepare_out_folder
     parent = os.path.abspath(os.path.join(root,
         os.pardir))
-    out_folder = parent
-    #out_folder = os.path.join(parent, 'res_pick')
-    # if not os.path.exists(out_folder):
-        # os.mkdir(out_folder)
-
     # set current dir to out_folder, so output files will be there
-    print("change out dir to:" + out_folder)
-    os.chdir(out_folder)
+    # print("change out dir to:" + out_folder)
+    # os.chdir(out_folder)
 
     try:
+        mylogger(parent).info('Starting processing %s' % root)
         convertor = SourceToXlsx(root)
         convertor.save("sources.xlsx")
     except Exception as e:
