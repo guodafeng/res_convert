@@ -27,10 +27,10 @@ class SourceItem(object):
 
     def __init__(self, name, value, res_file, feature, textid = ''):
         """
-        name: ID-In-Source in out xlsx
-        res_file: Path-of-Source in out xlsx
-        textid: TextID in source Table
-        value: English-GB in source Table
+        name: ID in Source file
+        res_file: Path of source file in relative_path mode 
+        textid: TextID in source Table, trail uuid to be unique
+        value: string in source file
         """
         self.name = name
         self.value = value
@@ -48,7 +48,6 @@ class SourceItem(object):
             uni_id = str(uuid.uuid4())[:8]
         SourceItem.uni_ids.add(uni_id)
         return uni_id
-
 
     def __repr__(self):
         return '%s, %s, %s, %s' % (self.textid, self.name, self.value, self.res_file)
@@ -108,11 +107,11 @@ class SourceToXlsx(object):
 
     def save(self, filename):
         try:
-            if filename.find(':') < 0: # not abs path
-                out_folder = os.path.abspath(
-                        os.path.join(self.source_root, os.pardir))
-                filename = out_folder + '\\' + filename
+            out_folder = os.path.abspath(
+                    os.path.join(self.source_root, os.pardir))
+            filename = os.path.join(out_folder, filename)
  
+            mylogger().error('file saved to' + filename)
             self.wb.save(filename)
         except Exception as e:
             mylogger().error(str(e))
@@ -141,7 +140,8 @@ class SourceToXlsx(object):
 
             source_map[ws[idx].value] = (
             SourceItem(ws[name_idx].value,
-                    ws[value_idx].value, ws[path_idx].value,
+                    ws[value_idx].value,
+                    utility.replace_separator(ws[path_idx].value),
                     ws[fea_idx].value, ws[idx].value) 
             )
 
@@ -166,7 +166,8 @@ class SourceUpdate(SourceBasic):
         change the value in file_name with value in res_list
         """
         #TODO: handle the same file has same ID, e.g. music.properties
-        # change res_list to map name:value
+
+        # create map from res_list
         res_map = {}
         for item in res_list:
             res_map[item.name] = item.value
@@ -194,11 +195,12 @@ class SourcePicker(SourceBasic):
         parent = os.path.abspath(os.path.join(filename, os.pardir))
         featur_name = ''
 
-        while not os.path.exists(parent + '\\manifest.properties'):
+        while not os.path.exists(os.path.join(parent,
+            'manifest.properties')):
             parent2 = os.path.abspath(os.path.join(parent, os.pardir))
             # if look back reach root of drive and no manifest file
             # use direct parent folder as feature name
-            if parent == parent2: 
+            if parent == parent2: # reach the root 
                 parent = os.path.abspath(os.path.join(filename, os.pardir))
                 break
             parent = parent2
@@ -298,7 +300,7 @@ def process(root):
     try:
         mylogger(parent).info('Starting processing %s' % root)
         convertor = SourceToXlsx(root)
-        convertor.save("sources.xlsx")
+        convertor.save("source.xlsx")
     except Exception as e:
         mylogger().error(str(e))
         pass
@@ -308,11 +310,13 @@ def main():
         from given folder')
 
     parser.add_argument('-i','--in', nargs='+', required=True,
-                       help='''Define root folder of resource files. It is mandatory.''')
+                       help='''Define root folder of resource files. It
+                       is mandatory. Sources.xlsx will be generated
+                       under this folder too.''')
 
-    parser.add_argument('-o', '--out', nargs='+',
-                        help='''The result output folder, including log
-                        files''')
+    # parser.add_argument('-o', '--out', nargs='+',
+                        # help='''The result output folder, including log
+                        # files''')
     
     args = vars(parser.parse_args())
    

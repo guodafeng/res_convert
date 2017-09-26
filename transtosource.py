@@ -83,7 +83,8 @@ class XlsxToSource(object):
 
         source_root = os.path.abspath(os.path.join(source_us, os.pardir))
         for lancode in trans_map:
-            source_lan = source_root + '\\' + lancode
+            source_lan = os.path.join(source_root, lancode)
+
             if not os.path.exists(source_lan):
                 shutil.copytree(source_us, source_lan)
 
@@ -99,12 +100,49 @@ class XlsxToSource(object):
 
     def update_source_lan(self, source_lan, source_map):
         for relpath in source_map:
-            picksource.SourceUpdate().update_file(source_lan + '\\' + relpath,
-                    source_map[relpath])
+            picksource.SourceUpdate().update_file(os.path.join(source_lan,
+                relpath), source_map[relpath])
 
 
 
+def main():
+    parser = argparse.ArgumentParser(description='Create translated \
+    source files from base source files.')
 
+    parser.add_argument('-b','--base', nargs='+', required=True,
+                       help='''Define root path of resource files.
+                       Normally it is the path of en-US folder.''')
 
+    parser.add_argument('-s','--sourcetable', nargs='+', 
+                       help='''The source table (xlsx file) generated 
+                       from base source files. If not given, it will be
+                       set to source.xlsx which has the same parent with
+                       path set by --base''')
 
+    parser.add_argument('-t','--translationtable', nargs='+',
+                       help='''The translation table (xlsx file) which
+                       contains the translated string. The translation
+                       will be update to source file according the ID
+                       mapping in source table.''')
+   
+    args = vars(parser.parse_args())
+   
+    source_base = args['base'][0]
+    parent = os.path.abspath(os.path.join(source_base, os.pardir))
+
+    if args['sourcetable']:
+        source_table = args['sourcetable'][0]
+    else:
+        source_table = os.path.join(parent, 'source.xlsx')
+
+    if args['translationtable']:
+        trans_table = args['translationtable'][0]
+    else:
+        trans_table = os.path.join(parent, 'trans.xlsx')
+
+    convertor = XlsxToSource()
+    convertor.trans_to_source(source_base, source_table, trans_table)
+
+if __name__ == '__main__':
+    main()
 

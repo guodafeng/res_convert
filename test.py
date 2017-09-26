@@ -3,9 +3,10 @@ from picksource import *
 from transtosource import *
 
 class TestResConvert(unittest.TestCase):
-   @unittest.skip
+    @unittest.skip
     def test_load_source_xlsx(self):
-        source_map = SourceToXlsx.load_source_xlsx('test\\sources_test.xlsx')
+        source_map = \
+        SourceToXlsx.load_source_xlsx(os.path.join('test','sources_test.xlsx'))
         self.assertEqual('Music',
         source_map['music_31ab7049'].value)
         
@@ -14,12 +15,14 @@ class TestResConvert(unittest.TestCase):
 
     @unittest.skip
     def test_load_trans_xlsx(self):
-        trans_map = XlsxToSource().load_translate_xlsx('test\\translate_test.xlsx')
+        trans_map = \
+        XlsxToSource().load_translate_xlsx(os.path.join('test',
+            'translate_test.xlsx'))
         self.assertEqual('级别23', trans_map['sk-SK'][0].translation)
 
     def test_get_feature(self):
-        feature = SourcePicker.get_feature(r'D:\yunfeng\nstring\convert\source\en-US\apps\communications\contacts\contacts.properties')
-
+        feature = \
+        SourcePicker.get_feature(utility.replace_separator(r'string_src\en-US\apps\communications\contacts\contacts.properties'))
         self.assertEqual('communications', feature)
 
     def test_res_pattern(self):
@@ -38,23 +41,24 @@ class TestResConvert(unittest.TestCase):
         self.assertFalse(match3)
 
 
+    @unittest.skip
     def test_update_file(self):
         picker = SourcePicker('')
-        res_list = picker.pick_file(r'test\music_c1.properties', '')
+        res_list = picker.pick_file(os.path.join('test',
+        'music_c1.properties'), '')
         updater = SourceUpdate()
-        updater.update_file(r'test\music.properties', res_list)
+        updater.update_file(os.path.join('test', 'music.properties'), res_list)
 
     def test_pick_source(self):
-        picker = SourceToXlsx(r'test\en-US')
+        picker = SourceToXlsx(os.path.join('test', 'en-US'))
         picker.save('source.xlsx')
         
     
     def test_trans_to_source(self):
         convertor = XlsxToSource()
-        convertor.trans_to_source(r'test\transtosource\en-US',
-        r'test\transtosource\source.xlsx',
-        r'test\transtosource\trans.xlsx',)
-
+        convertor.trans_to_source(os.path.join('test', 'transtosource',
+        'en-US'), os.path.join('test', 'transtosource', 'source.xlsx'),
+        os.path.join('test', 'transtosource', 'trans.xlsx'))
 
 
 if __name__ == '__main__':
