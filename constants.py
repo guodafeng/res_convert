@@ -16,6 +16,7 @@ TRANSLATION = "Translation"
 SOURCEID = "ID-In-Source"
 SOURCEPATH = "Path-of-Source"
 OLDID = "OLD_ID"
+OLDVALUE = "OLD_VALUE"
 
 TITLE_ROW = 3
 # Source columns
@@ -48,7 +49,8 @@ T2_SOURCES_COLUMNS = (
             DESCRIPTION,
             ENGLISHGB,
             COMMENT,
-            OLDID
+            OLDID,
+            OLDVALUE
             )
         
 # Translation columns

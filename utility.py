@@ -31,9 +31,10 @@ def replace_separator(path):
     path: the path might be windows or unix separated
     out: change to system related separator
     """
-    sep = r'[/\\]'
-    elms = re.split(sep, path)
-    return os.path.join(*elms)
+    if path:
+        sep = r'[/\\]'
+        elms = re.split(sep, path)
+        return os.path.join(*elms)
 
 
 

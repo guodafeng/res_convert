@@ -25,7 +25,8 @@ def mylogger(path = ''):
 class SourceItem(object):
     uni_ids = set()
 
-    def __init__(self, name, value, res_file, feature, textid = ''):
+    def __init__(self, name, value, res_file, feature, layout = '', 
+            textid = ''):
         """
         name: ID in Source file
         res_file: Path of source file in relative_path mode 
@@ -36,10 +37,13 @@ class SourceItem(object):
         self.value = value
         self.res_file = res_file
         self.feature = feature
+        self.layout = layout
         if textid == '':
             self.textid = name + '_' + self.get_uniq_id()
         else:
             self.textid = textid
+
+        self.new_id = '' # id in t2 format
 
     def get_uniq_id(self):
         uni_id = str(uuid.uuid4())[:8]
@@ -118,6 +122,9 @@ class SourceToXlsx(object):
         idx = cls.col_map[constants.FEATURE] + str(row_num)
         ws[idx] = res.feature
 
+        idx = cls.col_map[constants.LAYOUT] + str(row_num)
+        ws[idx] = res.layout
+
     @classmethod
     def save_source_xlsx(cls, src_items, xlsx):
         wb = Workbook()
@@ -153,12 +160,13 @@ class SourceToXlsx(object):
             value_idx = col_map[constants.ENGLISHGB] + str(read_row)
             path_idx = col_map[constants.SOURCEPATH] + str(read_row)
             fea_idx = col_map[constants.FEATURE] + str(read_row)
+            lay_idx = col_map[constants.LAYOUT] + str(read_row)
 
             source_map[ws[idx].value] = (
             SourceItem(ws[name_idx].value,
                     ws[value_idx].value,
                     utility.replace_separator(ws[path_idx].value),
-                    ws[fea_idx].value, ws[idx].value) 
+                    ws[fea_idx].value, ws[lay_idx].value, ws[idx].value) 
             )
 
             read_row += 1 
