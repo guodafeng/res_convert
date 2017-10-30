@@ -67,11 +67,32 @@ class XlsxToSource(object):
             TranslateItem(row[acc_idx].value, row[prj_idx].value, 
                 row[fea_idx].value, row[idx].value, row[lan_idx].value, 
                 row[tran_idx].value) 
+            # remove langcode prefix in translation
+            code_len = len(trans_item.langcode)
+            if trans_item.translation[:code_len] == trans_item.langcode:
+                trans_item.translation = \
+                trans_item.translation[code_len+1:]
 
             translations.append(trans_item)
             idx = col_map[constants.TEXTID]
 
         return translations
+
+    def load_translate_folder(self, folder):
+        def is_xlsx(name):
+            return name[-5:] == '.xlsx'
+
+        translations = []
+        folder = os.path.abspath(folder)
+        for item in os.listdir(folder):
+            subpath = os.path.join(folder, item)
+            if os.path.isfile(subpath) and is_xlsx(subpath):
+                translations += self.load_translate_xlsx(subpath)
+
+        return translations
+
+
+
 
     def _get_lancode_map(self, translations):
         lancode_map = defaultdict(list)
@@ -104,11 +125,25 @@ class XlsxToSource(object):
                     #todo:not finished yet
                     pass
                 
+    def load_langcode(self, langfile='all_lang_code.txt'):
+        lines = utility.read_as_list(langfile)
+        # create code -> name map
+        pattern = re.compile(r'(\S+)\s+(\S+)')
+        name_map = {}
+        for line in lines:
+            match = pattern.search(line)
+            if match:
+                name = match.groups()[0]
+                code = match.groups()[1]
+                name_map[code] = name
+
+        return name_map
             
     def save_trans_t2(self, trans_xlsx, t2_xlsx):
-        translations = self.load_translate_xlsx(trans_xlsx)
+        translations = self.load_translate_folder(trans_xlsx)
         id_map = self._get_id_map(translations)
         lancode_map = self._get_lancode_map(translations)
+        lanname_map = self.load_langcode()
 
         wb = Workbook()
         ws = wb.active
@@ -119,9 +154,14 @@ class XlsxToSource(object):
         cur_col = 1
         ws.cell(row=cur_row, column=cur_col).value = 'RefName' 
         col_map = {'RefName':cur_col}
+        cur_col += 1
+        ws.cell(row=cur_row, column=cur_col).value = 'ModOP' 
+        col_map['ModOP'] = cur_col
+
         for code in sorted(lancode_map.keys()):
             cur_col += 1
-            ws.cell(row=cur_row, column=cur_col).value = code
+            ws.cell(row=cur_row, column=cur_col).value = \
+                lanname_map[code]
             col_map[code] = cur_col 
 
         # fill translation row
@@ -129,6 +169,9 @@ class XlsxToSource(object):
             cur_row += 1
             cur_col = col_map['RefName']
             ws.cell(row=cur_row, column=cur_col).value = textid
+            cur_col = col_map['ModOP']
+            ws.cell(row=cur_row, column=cur_col).value = \
+                    id_map[textid][0].feature
             for trans in id_map[textid]:
                 cur_col = col_map[trans.langcode]
                 ws.cell(row=cur_row, column=cur_col).value = trans.translation
@@ -177,13 +220,13 @@ def to_t2_xlsx_main():
             with translation filled in t2 format')
 
     parser.add_argument('-i','--in', nargs='+', 
-                       help='translation table exported from \
+                       help='The folder including translation table exported from \
                        nstring')
     parser.add_argument('-o','--out', nargs='+', 
                       help='output file. translation table in t2 \
                       format')
     args = vars(parser.parse_args())
-    nstring_trans = 'string_src/trans.xlsx'
+    nstring_trans = 'string_src/translation/'
     t2_trans = 'string_src/trans_t2.xlsx'
     if args['in']:
         nstring_trans = args['in'][0]
