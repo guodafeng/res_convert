@@ -180,6 +180,11 @@ def save_t2_source(t2_items, xlsx, desc = ''):
     save_source_xlsx(t2_items, xlsx)
 
 def load_t2_source(xlsx):
+    """
+    out:
+      old_map: old id map to t2 source item
+      t2_map: t2 id map to t2 source item
+    """
     from openpyxl import load_workbook
     wb = load_workbook(filename = xlsx)
     ws = wb.active
@@ -262,22 +267,6 @@ def save_map(t2_map, source_map, not_in_t2, changed_in_t2):
     'map_not_int_t2.xlsx')
 
 
-def replace_with_t2id(xliff, old_map):
-    pattern = re.compile(r'resname="([^"]+)"')
-    lines = utility.read_as_list(xliff)
-    out_lines = []
-    for line in lines:
-        match = pattern.search(line)
-        if match:
-            old_id = match.groups()[0]
-            if old_id in old_map and old_map[old_id].textid:
-                new_id = 'resname="%s"' % old_map[old_id].textid
-                line = re.sub(pattern, new_id, line)
-
-        out_lines.append(line)
-    utility.save_list(xliff, out_lines)
-
-
 def create_mapped_files():
     (t2_map, source_map, not_in_t2, changed_in_t2) = \
         map_source_t2('string_src/Argon_string.xlsx',
@@ -285,20 +274,6 @@ def create_mapped_files():
         ' id_layout_en-GB.XLSX')
     save_map(t2_map, source_map, not_in_t2, changed_in_t2)
 
-def replace_xliff_folder(folder, old_map):
-    def is_xliff(name):
-        return name[-4:] == '.xlf'
-
-    folder = os.path.abspath(folder)
-    for item in os.listdir(folder):
-        subpath = os.path.join(folder, item)
-        if os.path.isfile(subpath) and is_xliff(subpath):
-            replace_with_t2id(subpath, old_map)
-
-def do_replace_xliff():
-    t2_map, old_map = load_t2_source('map_source_t2_v3.xlsx')
-    replace_xliff_folder('string_src/xliff/batch1_36lan', old_map)
-
-
-create_mapped_files()
+if __name__ == '__main__':
+    create_mapped_files()
 
