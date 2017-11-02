@@ -100,6 +100,7 @@ class XliffUpdate(object):
         self.source_base_map = source_base_map
         self.base_map = base_map
         self.lang_map = lang_map
+        self.new_account = 'KAIOS_UPDATE'
         self.state = 0
         self.skipped = []
 
@@ -154,7 +155,9 @@ class XliffUpdate(object):
             match = pattern.search(line)
             if match:
                 return match.groups()[0]
-
+        # all group info should use same new account, otherwise error
+        # when import to DB
+        line = self._update_attrib(line, 'x-account', self.new_account)
         resname = get_resname(line)
         if resname not in self.old_map: 
             # skip if the resname is not in t2 string table
@@ -165,7 +168,6 @@ class XliffUpdate(object):
         t2_item = self.old_map[resname]
         self.new_res_id = t2_item.textid
         self.new_feature = t2_item.feature
-        self.new_account = 'KAIOS_UPDATE'
 
         self.new_sourcebaseid = self._get_sourcebase(self.new_res_id)
         self.new_targetbaseid = self._get_targetbase(self.new_sourcebaseid,
@@ -173,7 +175,6 @@ class XliffUpdate(object):
         line = self._update_outattrib(line, 'resname',
                 '"{0}"'.format(self.new_res_id))
         line = self._update_attrib(line, 'x-feature', self.new_feature)
-        line = self._update_attrib(line, 'x-account', self.new_account)
         line = self._update_attrib(line, 'x-sourceid',
                 self.new_sourcebaseid)
         line = self._update_attrib(line, 'x-sourcebaseid',
