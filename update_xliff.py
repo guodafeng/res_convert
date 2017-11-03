@@ -74,6 +74,7 @@ def update_xliff(folder):
         return name[-4:] == '.xlf'
 
     skipped = set()
+    kept = set()
     folder = os.path.abspath(folder)
     for item in os.listdir(folder):
         subpath = os.path.join(folder, item)
@@ -82,7 +83,10 @@ def update_xliff(folder):
                     targetbase_map, lang_map)
             xliff_update.do_update_raw()
             skipped.update(xliff_update.skipped)
+            kept.update(xliff_update.valids)
     utility.save_list(os.path.join(folder,'skipped.txt'), '\n'.join(skipped))
+
+    utility.save_list(os.path.join(folder,'kept.txt'), '\n'.join(kept))
 
 
 class XliffUpdate(object):
@@ -103,6 +107,8 @@ class XliffUpdate(object):
         self.new_account = 'KAIOS_UPDATE'
         self.state = 0
         self.skipped = []
+        self.valids = []
+        self.skipline = False
 
 
     def do_update_raw(self):
@@ -124,6 +130,11 @@ class XliffUpdate(object):
             match = re.match(r'\s*</group>', line)
             return True if match else False
 
+        def is_end_group_tag(line):
+            match = re.match(r'\s*</group>', line)
+            return True if match else False
+
+
         for line in lines:
             if not target_lan:
                 target_lan = parse_target_lan(line)
@@ -132,7 +143,10 @@ class XliffUpdate(object):
 
             line = self._update_group_raw(line)
 
-            out_lines.append(line)
+            if not self.skipline:
+                out_lines.append(line)
+            elif is_end_group_tag(line):
+                self.skipline = False
 
         utility.save_list(self.xliff, out_lines)
 
@@ -162,6 +176,7 @@ class XliffUpdate(object):
         if resname not in self.old_map: 
             # skip if the resname is not in t2 string table
             self.skipped.append(resname)
+            self.skipline = True
             return line
 
         self.state += 1
@@ -180,6 +195,7 @@ class XliffUpdate(object):
         line = self._update_attrib(line, 'x-sourcebaseid',
                 self.new_sourcebaseid)
 
+        self.valids.append(self.new_res_id)
         return line
 
     def _update_transunit(self, line):
