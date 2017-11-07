@@ -71,10 +71,11 @@ def update_xliff(folder):
     lang_map = load_langmap()
 
     def is_xliff(name):
-        return name[-4:] == '.xlf'
+        return name[-4:] == '.xlf' or name[-6:] == '.xliff'
 
     skipped = set()
     kept = set()
+    newid_skipped = set()
     folder = os.path.abspath(folder)
     for item in os.listdir(folder):
         subpath = os.path.join(folder, item)
@@ -84,14 +85,16 @@ def update_xliff(folder):
             xliff_update.do_update_raw()
             skipped.update(xliff_update.skipped)
             kept.update(xliff_update.valids)
-    utility.save_list(os.path.join(folder,'skipped.txt'), '\n'.join(skipped))
-
-    utility.save_list(os.path.join(folder,'kept.txt'), '\n'.join(kept))
+            newid_skipped.update(xliff_update.newid_skipped)
+    utility.save_list(os.path.join(folder,'not_in_t2_oldid.txt'), '\r\n'.join(skipped))
+    utility.save_list(os.path.join(folder,'not_in_db_newid.txt'),
+            '\r\n'.join(newid_skipped))
+    utility.save_list(os.path.join(folder,'kept.txt'), '\r\n'.join(kept))
 
 
 class XliffUpdate(object):
     """
-    only support product-version=2.2 
+    only support product-version=2.2 and 2.1
     """
     IDLE_S = 0
     PROCESSING_S = 1
@@ -107,8 +110,10 @@ class XliffUpdate(object):
         self.new_account = 'KAIOS_UPDATE'
         self.state = 0
         self.skipped = []
+        self.newid_skipped = []
         self.valids = []
         self.skipline = False
+        self.version = None
 
 
     def do_update_raw(self):
@@ -119,6 +124,11 @@ class XliffUpdate(object):
 
         def parse_target_lan(line):
             match = re.search(r'target-language="([^"]+)"', line)
+            if match:
+                return match.groups()[0]
+
+        def parse_version(line):
+            match = re.search(r'product-version="([^"]+)"', line)
             if match:
                 return match.groups()[0]
 
@@ -141,6 +151,9 @@ class XliffUpdate(object):
                 if target_lan:
                     self.lang_id = self.lang_map[target_lan]
 
+            if not self.version:
+                self.version = parse_version(line)
+
             line = self._update_group_raw(line)
 
             if not self.skipline:
@@ -158,14 +171,22 @@ class XliffUpdate(object):
         return line
 
     def _update_outattrib(self, line, attrib, value):
-        pattern = r'{0}=\S+'.format(attrib)
+        pattern = r'{0}="[^"]+"'.format(attrib)
         rep = '{0}={1}'.format(attrib, value)
         line = re.sub(pattern, rep, line)
         return line
  
+    def _get_id_tag(self):
+        if self.version == '2.2':
+            return 'resname'
+        elif self.version == '2.1':
+            return 'id'
+
     def _update_resname(self, line):
         def get_resname(line):
-            pattern = re.compile(r'resname="([^"]+)"')
+            pattern = \
+                re.compile(r'{0}="([^"]+)"'.format(self._get_id_tag()))
+
             match = pattern.search(line)
             if match:
                 return match.groups()[0]
@@ -179,15 +200,21 @@ class XliffUpdate(object):
             self.skipline = True
             return line
 
-        self.state += 1
         t2_item = self.old_map[resname]
         self.new_res_id = t2_item.textid
         self.new_feature = t2_item.feature
 
-        self.new_sourcebaseid = self._get_sourcebase(self.new_res_id)
+        if self.new_res_id not in self.source_base_map:
+            self.newid_skipped.append(self.new_res_id)
+            self.skipline = True
+            return line
+
+        self.state += 1
+
+        self.new_sourcebaseid = self.source_base_map[self.new_res_id]
         self.new_targetbaseid = self._get_targetbase(self.new_sourcebaseid,
                 self.lang_id)
-        line = self._update_outattrib(line, 'resname',
+        line = self._update_outattrib(line, self._get_id_tag(),
                 '"{0}"'.format(self.new_res_id))
         line = self._update_attrib(line, 'x-feature', self.new_feature)
         line = self._update_attrib(line, 'x-sourceid',
@@ -210,6 +237,12 @@ class XliffUpdate(object):
                 self.new_targetbaseid)
 
         return line
+    
+    def _update_context_group(self, line):
+        line = self._update_outattrib(line, 'name',
+                '"{0}"'.format(self.new_res_id))
+        return line
+
 
     def _update_group_raw(self, line):
         def is_group_tag(line):
@@ -220,10 +253,16 @@ class XliffUpdate(object):
             match = re.match(r'\s*<trans-unit.+>', line)
             return True if match else False
 
+        def is_context_group(line):
+            match = re.match(r'\s*<context-group.+>', line)
+            return True if match else False
+
         if is_group_tag(line):
             line = self._update_resname(line)
         elif is_trans_unit(line):
             line = self._update_transunit(line)
+        elif self.version == '2.1' and is_context_group(line):
+            line = self._update_context_group(line)
 
         return line
 
@@ -234,50 +273,6 @@ class XliffUpdate(object):
         return self.base_map[(sourcebaseid, lang_id)]
 
        
-
-    # def do_update(self):
-        # tree = ET.parse(self.xliff)
-        # root = tree.getroot()
-
-        # ns = {'myns': 'urn:oasis:names:tc:xliff:document:1.2'}
-        # file_elm = root.find('myns:file', ns)
-        # target_lan = file_elm.get('target-language') 
-        # self.lang_id = self.lang_map[target_lan]
-
-        # groups = root.findall('./myns:file/myns:body/myns:group', ns)
-
-        # for group in groups:
-            # self._update_group(group)
-
-        # tree.write(self.xliff)
-
-    # def _update_group(self, group):
-        # res_id = group.get('resname')
-        # if res_id not in self.old_map: # may be not in t2 string table
-            # return
-
-        # t2_item = self.old_map[res_id]
-        # new_res_id = t2_item.textid
-        # new_feature = t2_item.feature
-        # new_account = 'KAIOS_UPDATE'
-
-        # new_sourcebaseid = self._get_sourcebase(new_res_id)
-        # new_targetbaseid = self._get_targetbase(new_sourcebaseid,
-                # self.lang_id)
-
-        # group.set('resname', new_res_id)
-        # group.set('x-account', new_account)
-        # group.set('x-feature', new_feature)
-        # group.set('x-sourceid', new_sourcebaseid)
-        # group.set('x-sourcebaseid', new_sourcebaseid)
-    
-        # ns = {'myns': 'urn:oasis:names:tc:xliff:document:1.2'}
-        # trans = group.findall('myns:trans-unit', ns)
-        # if len(trans) > 1:
-            # print("Warning: more than one trans-unit in group found")
-        # trans[0].set('x-targetid', new_targetbaseid)
-        # trans[0].set('x-targetbaseid', new_targetbaseid)
-
 
 def test():
     t2_map, old_map = map_t2_string.load_t2_source('map_source_t2_v3.xlsx')
@@ -296,7 +291,7 @@ def test():
         print('error' + lang_map['doi-IN'])
         return
 
-    xliff_update = XliffUpdate('string_src/xliff/Albanian.xlf', 
+    xliff_update = XliffUpdate('string_src/xliff/Albanian.xliff', 
             old_map, sourcebase_map, targetbase_map, lang_map)
     xliff_update.do_update_raw()
 
@@ -321,6 +316,11 @@ def testxliff():
 
  
 #test()
-update_xliff('string_src/xliff/batch1_36lan')
+update_xliff('string_src/xliff/Batch2')
+update_xliff('string_src/xliff/Batch3')
+update_xliff('string_src/xliff/Batch4')
+update_xliff('string_src/xliff/Batch5')
+update_xliff('string_src/xliff/Batch6')
+update_xliff('string_src/xliff/Batch7')
 
 
