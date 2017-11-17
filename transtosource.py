@@ -67,11 +67,6 @@ class XlsxToSource(object):
             TranslateItem(row[acc_idx].value, row[prj_idx].value, 
                 row[fea_idx].value, row[idx].value, row[lan_idx].value, 
                 row[tran_idx].value) 
-            # remove langcode prefix in translation
-            code_len = len(trans_item.langcode)
-            if trans_item.translation[:code_len] == trans_item.langcode:
-                trans_item.translation = \
-                trans_item.translation[code_len+1:]
 
             translations.append(trans_item)
             idx = col_map[constants.TEXTID]
@@ -125,25 +120,76 @@ class XlsxToSource(object):
                     #todo:not finished yet
                     pass
                 
-    def load_langcode(self, langfile='all_lang_code.txt'):
+    def load_langcode(self, langfile='tb_lang.txt'):
         lines = utility.read_as_list(langfile)
         # create code -> name map
-        pattern = re.compile(r'(\S+)\s+(\S+)')
+        pattern = re.compile(r'(\S+)\s+(\S+)\s+(\S+)')
+        #more accurate match for languanges with () in name
+        pattern2 = re.compile(r'(\S+)\s+(\S+ \(\S+\))\s+(\S+)')
         name_map = {}
+        code_map = {}
         for line in lines:
             match = pattern.search(line)
             if match:
-                name = match.groups()[0]
-                code = match.groups()[1]
-                name_map[code] = name
+                match2 = pattern2.search(line)
+                if match2:
+                    match = match2
 
-        return name_map
+                name = match.groups()[1]
+                code = match.groups()[2]
+                name_map[code] = name
+                code_map[name] = code
+
+        return name_map, code_map
             
-    def save_trans_t2(self, trans_xlsx, t2_xlsx):
+    def load_tb_transview(self, tb_transview):
+        lanname_map, code_map = self.load_langcode()
+        lines = utility.read_as_list(tb_transview)
+        translations = []
+
+        pattern = \
+        re.compile(r'(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(.+)')
+        pattern2 = \
+        re.compile(r'(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+ \(\S+\))\s+(.+)')
+        for index, line in enumerate(lines):
+
+            match = pattern.match(line)
+            if match:
+                match2 = pattern2.match(line)
+                if match2:
+                    match = match2
+                text_id = match.groups()[0]
+                account = match.groups()[1]
+                project = match.groups()[2]
+                feature = match.groups()[3]
+                lang = match.groups()[4]
+                trans = match.groups()[5]
+
+                if lang not in code_map:
+                    print(lang, index)
+                trans_item = \
+                TranslateItem(account, project, feature, 
+                    text_id, code_map[lang], trans)
+
+                translations.append(trans_item)
+            else:
+                print(index)
+
+        return translations
+
+
+    def convert_excel_trans(self, trans_xlsx, t2_xlsx): 
         translations = self.load_translate_folder(trans_xlsx)
+        self.save_trans_t2(translations, t2_xlsx)
+
+    def convert_txt_trans(self, tb_transview, t2_xlsx):
+        translations = self.load_tb_transview(tb_transview)
+        self.save_trans_t2(translations, t2_xlsx)
+
+    def save_trans_t2(self, translations, t2_xlsx):
         id_map = self._get_id_map(translations)
         lancode_map = self._get_lancode_map(translations)
-        lanname_map = self.load_langcode()
+        lanname_map, code_map = self.load_langcode()
 
         wb = Workbook()
         ws = wb.active
@@ -234,7 +280,9 @@ def to_t2_xlsx_main():
         t2_trans = args['out'][0]
 
     convertor = XlsxToSource()
-    convertor.save_trans_t2(nstring_trans, t2_trans)
+    nstring_trans = 'tb_searched.txt'
+    t2_trans = 'trans_t2_18.xlsx'
+    convertor.convert_txt_trans(nstring_trans, t2_trans)
 
 def to_source_file_main():
 
@@ -277,4 +325,5 @@ def to_source_file_main():
 
 if __name__ == '__main__':
     to_t2_xlsx_main()
+
 

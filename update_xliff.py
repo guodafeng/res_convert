@@ -64,8 +64,12 @@ def load_langmap(lang_tb = 'tb_lang.txt'):
     return lang_map
 
 
+def map_source_table():
+    # return 'map_source_t2_v3.xlsx'
+    return 'string_src/translation/newfeatureidmap.xlsx'
+
 def update_xliff(folder):
-    t2_map, old_map = map_t2_string.load_t2_source('map_source_t2_v3.xlsx')
+    t2_map, old_map = map_t2_string.load_t2_source(map_source_table())
     sourcebase_map = load_sourcebase()
     targetbase_map = load_targetbase()
     lang_map = load_langmap()
@@ -80,6 +84,7 @@ def update_xliff(folder):
     for item in os.listdir(folder):
         subpath = os.path.join(folder, item)
         if os.path.isfile(subpath) and is_xliff(subpath):
+            print(subpath)
             xliff_update = XliffUpdate(subpath, old_map, sourcebase_map,
                     targetbase_map, lang_map)
             xliff_update.do_update_raw()
@@ -316,11 +321,14 @@ def testxliff():
 
  
 #test()
-update_xliff('string_src/xliff/Batch2')
-update_xliff('string_src/xliff/Batch3')
-update_xliff('string_src/xliff/Batch4')
-update_xliff('string_src/xliff/Batch5')
-update_xliff('string_src/xliff/Batch6')
-update_xliff('string_src/xliff/Batch7')
+# update_xliff('string_src/xliff/Batch2')
+# update_xliff('string_src/xliff/Batch3')
+# update_xliff('string_src/xliff/Batch4')
+# update_xliff('string_src/xliff/Batch5')
+# update_xliff('string_src/xliff/Batch6')
+# update_xliff('string_src/xliff/Batch7')
+
+
+update_xliff('string_src/translation/Argon_Delta_83lans_1013')
 
 
