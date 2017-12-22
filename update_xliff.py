@@ -6,7 +6,7 @@ import xml.etree.ElementTree as ET
 
 import utility
 import map_t2_string
-
+from dbwrapper import *
 
 def load_sourcebase(source_tb='tb_source.txt'):
     """
@@ -66,7 +66,7 @@ def load_langmap(lang_tb = 'tb_lang.txt'):
 
 def map_source_table():
     # return 'map_source_t2_v3.xlsx'
-    return 'string_src/translation/newfeatureidmap.xlsx'
+    return 'string_src/translation/newfeatureidmap2.xlsx'
 
 def update_xliff(folder):
     t2_map, old_map = map_t2_string.load_t2_source(map_source_table())
@@ -199,6 +199,7 @@ class XliffUpdate(object):
         # when import to DB
         line = self._update_attrib(line, 'x-account', self.new_account)
         resname = get_resname(line)
+        print("resname:", resname)
         if resname not in self.old_map: 
             # skip if the resname is not in t2 string table
             self.skipped.append(resname)
@@ -266,7 +267,7 @@ class XliffUpdate(object):
             line = self._update_resname(line)
         elif is_trans_unit(line):
             line = self._update_transunit(line)
-        elif self.version == '2.1' and is_context_group(line):
+        elif not self.skipline and self.version == '2.1' and is_context_group(line):
             line = self._update_context_group(line)
 
         return line
@@ -319,7 +320,68 @@ def testxliff():
         groups = root.findall('./myns:file/myns:body/myns:group', ns)
         print(len(groups))
 
- 
+
+def load_id_map(xlsx):
+    """
+     type: xlsx file contains two column, column 0 is old id, column 1
+        is new id
+     rtype: old id -> new id map
+    """
+    from openpyxl import load_workbook
+    wb = load_workbook(filename = xlsx)
+    ws = wb.active
+    rows = ws.rows
+   
+    id_map = {}
+    for row in rows:
+        id_map[row[0].value] = row[1].value
+
+    return id_map
+
+def load_sourcebase_db(ids):
+    whereClause = WhereClause()
+    whereClause.add('textid', ids)
+    dbWrapper = DBWrapper()
+    return dbWrapper.select_sourcebase(whereClause.clauses)
+
+def load_tr_db(ids):
+    whereClause = WhereClause()
+    whereClause.add('sourcebase_id', ids)
+    dbWrapper = DBWrapper()
+    return dbWrapper.select_tr(whereClause.clauses)
+
+
+
+def update_xliff_new(folder):
+    t2_map, old_map = map_t2_string.load_t2_source(map_source_table())
+    print("old map:", old_map)
+    sourcebase_map = load_sourcebase_db(t2_map.keys())
+    tr_map = load_tr_db(sourcebase_map.values())
+    lang_map = DBWrapper().select_languages_as_map()
+
+    def is_xliff(name):
+        return name[-4:] == '.xlf' or name[-6:] == '.xliff'
+
+    skipped = set()
+    kept = set()
+    newid_skipped = set()
+    folder = os.path.abspath(folder)
+    for item in os.listdir(folder):
+        subpath = os.path.join(folder, item)
+        if os.path.isfile(subpath) and is_xliff(subpath):
+            print(subpath)
+            xliff_update = XliffUpdate(subpath, old_map, sourcebase_map,
+                    tr_map, lang_map)
+            xliff_update.do_update_raw()
+            skipped.update(xliff_update.skipped)
+            kept.update(xliff_update.valids)
+            newid_skipped.update(xliff_update.newid_skipped)
+    utility.save_list(os.path.join(folder,'not_in_t2_oldid.txt'), '\r\n'.join(skipped))
+    utility.save_list(os.path.join(folder,'not_in_db_newid.txt'),
+            '\r\n'.join(newid_skipped))
+    utility.save_list(os.path.join(folder,'kept.txt'), '\r\n'.join(kept))
+
+
 #test()
 # update_xliff('string_src/xliff/Batch2')
 # update_xliff('string_src/xliff/Batch3')
@@ -329,6 +391,6 @@ def testxliff():
 # update_xliff('string_src/xliff/Batch7')
 
 
-update_xliff('string_src/translation/Argon_Delta_83lans_1013')
+update_xliff_new('string_src/translation/Delta_81lan')
 
 

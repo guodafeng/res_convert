@@ -9,6 +9,7 @@ from openpyxl import Workbook
 from collections import defaultdict
 from openpyxl import load_workbook
 
+import pymssql
 import constants
 import utility 
 import picksource
@@ -186,6 +187,114 @@ class XlsxToSource(object):
         translations = self.load_tb_transview(tb_transview)
         self.save_trans_t2(translations, t2_xlsx)
 
+    def convert_trans_bytextids(self, t2_xlsx):
+        server = 'BJ-SQL02.fihtdc.com'
+        user='nString'
+        password='Nstring123456'
+
+        with pymssql.connect(server, user, password, 'nstring',charset='utf8')\
+            as conn:
+            with conn.cursor(as_dict=True) as cursor:
+                textids = self.get_textids()
+
+                sql = "select Text, Account, Project, Feature, Language, Lv1 \
+                from TranslationView where Account='KAIOS_UPDATE' and Text in " \
+                + textids
+
+                cursor.execute(sql)
+
+                lines = []
+                translations = []
+                for row in cursor:
+                    trans_item = \
+                    TranslateItem(row['Account'], row['Project'],
+                    row['Feature'],row['Text'], row['Language'],
+                    row['Lv1'])
+
+                    translations.append(trans_item)
+
+                self.save_trans_t2_v2(translations, t2_xlsx)
+
+    def convert_trans_byaccount(self, t2_xlsx):
+        server = 'BJ-SQL02.fihtdc.com'
+        user='nString'
+        password='Nstring123456'
+
+        with pymssql.connect(server, user, password, 'nstring',charset='utf8')\
+            as conn:
+            with conn.cursor(as_dict=True) as cursor:
+
+                sql = "select Text, Account, Project, Feature, Language, Lv1 \
+                from TranslationView where Account='S30subcont' and \
+                Project='simplex4'"
+
+                cursor.execute(sql)
+
+                lines = []
+                translations = []
+                for row in cursor:
+                    trans_item = \
+                    TranslateItem(row['Account'], row['Project'],
+                    row['Feature'],row['Text'], row['Language'],
+                    row['Lv1'])
+
+                    translations.append(trans_item)
+
+                self.save_trans_t2_v2(translations, t2_xlsx)
+
+
+
+    def get_textids(self, fname = 'tb_searched.txt'):
+        with open(fname,'r',encoding='utf8') as f:
+            textids="("
+            for line in f.readlines():
+                line = line.strip()
+                if line:
+                    textids = "{0}'{1}',".format(textids, line)
+            textids = textids[:-1]  + ")"#remove last comma
+
+        return textids
+
+
+    def save_trans_t2_v2(self, translations, t2_xlsx):
+        # don't map lancode and langmap in this version
+        id_map = self._get_id_map(translations)
+        lancode_map = self._get_lancode_map(translations)
+
+        wb = Workbook()
+        ws = wb.active
+
+        # create map from langcode to column index in xlsx
+        # fill title row 
+        cur_row = 1
+        cur_col = 1
+        ws.cell(row=cur_row, column=cur_col).value = 'RefName' 
+        col_map = {'RefName':cur_col}
+        cur_col += 1
+        ws.cell(row=cur_row, column=cur_col).value = 'ModOP' 
+        col_map['ModOP'] = cur_col
+
+        for code in sorted(lancode_map.keys()):
+            cur_col += 1
+            ws.cell(row=cur_row, column=cur_col).value = code
+            col_map[code] = cur_col 
+
+        # fill translation row
+        for textid in sorted(id_map.keys()):
+            cur_row += 1
+            cur_col = col_map['RefName']
+            ws.cell(row=cur_row, column=cur_col).value = textid
+            cur_col = col_map['ModOP']
+            ws.cell(row=cur_row, column=cur_col).value = \
+                    id_map[textid][0].feature
+            for trans in id_map[textid]:
+                cur_col = col_map[trans.langcode]
+                ws.cell(row=cur_row, column=cur_col).value = trans.translation
+
+        wb.save(t2_xlsx)
+
+
+
     def save_trans_t2(self, translations, t2_xlsx):
         id_map = self._get_id_map(translations)
         lancode_map = self._get_lancode_map(translations)
@@ -280,9 +389,10 @@ def to_t2_xlsx_main():
         t2_trans = args['out'][0]
 
     convertor = XlsxToSource()
-    nstring_trans = 'tb_searched.txt'
-    t2_trans = 'trans_t2_18.xlsx'
-    convertor.convert_txt_trans(nstring_trans, t2_trans)
+    # t2_trans = 'trans_t2_newids.xlsx'
+    # convertor.convert_trans_bytextids(t2_trans)
+    t2_trans = 'trans_neo.xlsx'
+    convertor.convert_trans_byaccount(t2_trans)
 
 def to_source_file_main():
 
