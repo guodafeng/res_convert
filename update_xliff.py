@@ -199,9 +199,9 @@ class XliffUpdate(object):
         # when import to DB
         line = self._update_attrib(line, 'x-account', self.new_account)
         resname = get_resname(line)
-        print("resname:", resname)
         if resname not in self.old_map: 
             # skip if the resname is not in t2 string table
+            print("not in old_map, skipped resname:", resname)
             self.skipped.append(resname)
             self.skipline = True
             return line
@@ -211,6 +211,8 @@ class XliffUpdate(object):
         self.new_feature = t2_item.feature
 
         if self.new_res_id not in self.source_base_map:
+            print("new_res_id:", self.new_res_id)
+            print("not in source_base_map, skipped resname:", resname)
             self.newid_skipped.append(self.new_res_id)
             self.skipline = True
             return line
@@ -351,35 +353,44 @@ def load_tr_db(ids):
     return dbWrapper.select_tr(whereClause.clauses)
 
 
+def is_xliff(name):
+    return name[-4:] == '.xlf' or name[-6:] == '.xliff'
 
+def all_xliff_infolder(folder):
+    folder = os.path.abspath(folder)
+    for item in os.listdir(folder):
+        subpath = os.path.join(folder, item)
+        if os.path.isdir(subpath):
+            yield from all_xliff_infolder(subpath)
+        if os.path.isfile(subpath) and is_xliff(subpath):
+            yield subpath
+ 
 def update_xliff_new(folder):
     t2_map, old_map = map_t2_string.load_t2_source(map_source_table())
-    print("old map:", old_map)
+    print(t2_map)
+    print(old_map)
     sourcebase_map = load_sourcebase_db(t2_map.keys())
+    print(sourcebase_map)
     tr_map = load_tr_db(sourcebase_map.values())
     lang_map = DBWrapper().select_languages_as_map()
-
-    def is_xliff(name):
-        return name[-4:] == '.xlf' or name[-6:] == '.xliff'
 
     skipped = set()
     kept = set()
     newid_skipped = set()
-    folder = os.path.abspath(folder)
-    for item in os.listdir(folder):
-        subpath = os.path.join(folder, item)
-        if os.path.isfile(subpath) and is_xliff(subpath):
-            print(subpath)
-            xliff_update = XliffUpdate(subpath, old_map, sourcebase_map,
+
+    for xliff_file in all_xliff_infolder(folder):
+        xliff_update = XliffUpdate(xliff_file, old_map, sourcebase_map,
                     tr_map, lang_map)
-            xliff_update.do_update_raw()
-            skipped.update(xliff_update.skipped)
-            kept.update(xliff_update.valids)
-            newid_skipped.update(xliff_update.newid_skipped)
+        xliff_update.do_update_raw()
+        skipped.update(xliff_update.skipped)
+        kept.update(xliff_update.valids)
+        newid_skipped.update(xliff_update.newid_skipped)
+
     utility.save_list(os.path.join(folder,'not_in_t2_oldid.txt'), '\r\n'.join(skipped))
     utility.save_list(os.path.join(folder,'not_in_db_newid.txt'),
             '\r\n'.join(newid_skipped))
     utility.save_list(os.path.join(folder,'kept.txt'), '\r\n'.join(kept))
+
 
 
 #test()
@@ -391,6 +402,7 @@ def update_xliff_new(folder):
 # update_xliff('string_src/xliff/Batch7')
 
 
-update_xliff_new('string_src/translation/Delta_81lan')
+update_xliff_new('string_src/translation/legal')
+
 
 
