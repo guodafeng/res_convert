@@ -64,10 +64,6 @@ def load_langmap(lang_tb = 'tb_lang.txt'):
     return lang_map
 
 
-def map_source_table():
-    # return 'map_source_t2_v3.xlsx'
-    return 'string_src/translation/newfeatureidmap2.xlsx'
-
 def update_xliff(folder):
     t2_map, old_map = map_t2_string.load_t2_source(map_source_table())
     sourcebase_map = load_sourcebase()
@@ -113,7 +109,6 @@ class XliffUpdate(object):
         self.base_map = base_map
         self.lang_map = lang_map
         self.new_account = 'KAIOS_UPDATE'
-        self.state = 0
         self.skipped = []
         self.newid_skipped = []
         self.valids = []
@@ -141,10 +136,6 @@ class XliffUpdate(object):
             match = re.match(r'\s*<group.+>', line)
             return True if match else False
 
-        def parse_out_group(line):
-            match = re.match(r'\s*</group>', line)
-            return True if match else False
-
         def is_end_group_tag(line):
             match = re.match(r'\s*</group>', line)
             return True if match else False
@@ -163,7 +154,8 @@ class XliffUpdate(object):
 
             if not self.skipline:
                 out_lines.append(line)
-            elif is_end_group_tag(line):
+
+            if is_end_group_tag(line):
                 self.skipline = False
 
         utility.save_list(self.xliff, out_lines)
@@ -217,8 +209,6 @@ class XliffUpdate(object):
             self.skipline = True
             return line
 
-        self.state += 1
-
         self.new_sourcebaseid = self.source_base_map[self.new_res_id]
         self.new_targetbaseid = self._get_targetbase(self.new_sourcebaseid,
                 self.lang_id)
@@ -234,11 +224,9 @@ class XliffUpdate(object):
         return line
 
     def _update_transunit(self, line):
-        if self.state < 1:
-            # resname was skipped, skip transunit as well
+        if self.skipline:
             return line
 
-        self.state -= 1
         line = self._update_attrib(line, 'x-targetid',
                 self.new_targetbaseid)
         line = self._update_attrib(line, 'x-targetbaseid',
@@ -247,6 +235,8 @@ class XliffUpdate(object):
         return line
     
     def _update_context_group(self, line):
+        if self.skipline or self.version == '2.1':
+            return line
         line = self._update_outattrib(line, 'name',
                 '"{0}"'.format(self.new_res_id))
         return line
@@ -269,7 +259,7 @@ class XliffUpdate(object):
             line = self._update_resname(line)
         elif is_trans_unit(line):
             line = self._update_transunit(line)
-        elif not self.skipline and self.version == '2.1' and is_context_group(line):
+        elif is_context_group(line):
             line = self._update_context_group(line)
 
         return line
@@ -281,46 +271,10 @@ class XliffUpdate(object):
         return self.base_map[(sourcebaseid, lang_id)]
 
        
+def map_source_table():
+    # return 'map_source_t2_v3.xlsx'
+    return 'string_src/translation/newfeatureidmap2.xlsx'
 
-def test():
-    t2_map, old_map = map_t2_string.load_t2_source('map_source_t2_v3.xlsx')
-    sourcebase_map = load_sourcebase()
-    if sourcebase_map['alldayLongTimeFormat_f6d0472d'] != '1502883':	
-        print('error' + sourcebase_map['alldayLongTimeFormat_f6d0472d'])
-        return
-
-    targetbase_map = load_targetbase()
-    if targetbase_map[('1502779', '319')] != '65002100':
-        print('error' + targetbase_map[('1502779', '319')])
-        return
-
-    lang_map = load_langmap()
-    if lang_map['doi-IN'] != '402':
-        print('error' + lang_map['doi-IN'])
-        return
-
-    xliff_update = XliffUpdate('string_src/xliff/Albanian.xliff', 
-            old_map, sourcebase_map, targetbase_map, lang_map)
-    xliff_update.do_update_raw()
-
-def testxliff():
-        tree = ET.parse('string_src/xliff/Albanian.xlf')
-        root = tree.getroot()
-        print(root.get('version'))
-        for child in root:
-            print(child.tag,'ttttt', child.attrib)
-        ns = {'myns': 'urn:oasis:names:tc:xliff:document:1.2'}
-        file_elm = root.find('myns:file', ns)
-        print(file_elm)
-        target_lan = file_elm.get('target-language') 
-        print(target_lan)
-        lang_map = load_langmap()
-        lang_id = lang_map[target_lan]
-        print(target_lan, lang_id)
-
-
-        groups = root.findall('./myns:file/myns:body/myns:group', ns)
-        print(len(groups))
 
 
 def load_id_map(xlsx):
